@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.css' rel='stylesheet' />
+    <style>
+        #map {
+            width: 100%;
+            height: 100vh;
+        }
+
+        .mapboxgl-ctrl {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+        }
+
+        .toggle-button {
+            background-color: #fff;
+            border: 2px solid #007aff;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 16px;
+            margin-bottom: 10px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="mapboxgl-ctrl">
+        <button class="toggle-button" onclick="toggleTrails()">Toggle Trails</button>
+        <button class="toggle-button" onclick="toggleMountainFeatures()">Toggle Mountain Features</button>
+        <button class="toggle-button" onclick="toggleLifts()">Toggle Lifts</button>
+        <button class="toggle-button" onclick="toggleMountainCams()">Toggle Mountain Cams</button>
+    </div>
+
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1IjoiZHJlZWR2YWlsIiwiYSI6ImNtMzU2a3hlZzA3cHYyanE0bzNkYWxvam0ifQ.MxjGhWW6PF__DF9ujyxXiA';
+
+        var map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/satellite-streets-v11',
+            center: [-106.356017, 39.604750],
+            zoom: 12
+        });
+
+        var trailsVisible = true;
+        var mountainFeaturesVisible = true;
+        var liftsVisible = true; // New variable for lifts visibility
+        var mountainCamsVisible = true; // New variable for mountain cams visibility
+        var currentPopup = null;
+
+        var mountainMarkers = []; // Array to hold mountain feature markers
+        var liveFeedMarkers = []; // Array to hold live feed markers
+
+        var trailData = {
+            'DragonsTeeth': { coordinates: [[-106.334106, 39.604121], [-106.331083, 39.600064]], color: '#000000' },
+            'MarmotValley': { coordinates: [[-106.341207, 39.590913], [-106.340036, 39.584859]], color: '#000000' },
+            'Sweetnsour': { coordinates: [[-106.337700, 39.595197], [-106.334206, 39.593493]], color: '#000000' }
+        };
+
+        var liftData = {
+            'Orient': {
+                coordinates: [[-106.332047, 39.586120], [-106.321984, 39.605166]],
+                color: '#FF0000',
+                popupContent: "<strong>Orient Express</strong><br><strong>Type:</strong> High-Speed Quad<br><strong>Vertical Rise:</strong> 1,400 ft<br><strong> Time:</strong> 9 mins<br>" +
+                              "<iframe width='200' height='113' src='https://www.youtube.com/embed/nkeJFKI1Y9o?si=JVCOQWtmuaPkoaYp' frameborder='0' allowfullscreen></iframe>"
+            },
+            'Teacupexpress': {
+                coordinates: [[-106.339910, 39.584593], [-106.336286, 39.602144]],
+                color: '#FF0000',
+                popupContent: "<strong>Tea Cup Express</strong><br><strong>Type:</strong> High Speed Quad<br><strong>Vertical Rise:</strong> 900 ft<br><strong> Time:</strong> 9 mins<br>" +
+                              "<iframe width='200' height='113' src='https://www.youtube.com/embed/ZwtX_f373Fc?si=lMzFeG5blH5rLmIw' frameborder='0' allowfullscreen></iframe>"
+            }
+        };
+
+        map.on('load', function() {
+            map.addSource('dem', {
+                type: 'raster-dem',
+                url: 'mapbox://mapbox.terrain-rgb',
+                tileSize: 512,
+                maxzoom: 14
+            });
+            map.setTerrain({ source: 'dem', exaggeration: 1.5 });
+
+            Object.keys(trailData).forEach(function(trail) {
+                map.addSource(trail, {
+                    type: 'geojson',
+                    data: { type: 'Feature', geometry: { type: 'LineString', coordinates: trailData[trail].coordinates } }
+                });
+                map.addLayer({
+                    id: `${trail}-layer`,
+                    type: 'line',
+                    source: trail,
+                    paint: { 'line-color': trailData[trail].color, 'line-width': 4 },
+                    layout: { 'visibility': 'visible' } // Ensure the initial visibility is set to 'visible'
+                });
+            });
+
+            var trailPopups = {
+                'DragonsTeeth': new mapboxgl.Popup().setHTML(
+                    "<strong>Dragon's Teeth</strong><br><strong>Rating:</strong> Black<br><strong>Length:</strong> 250 feet<br><strong>Average Slope:</strong> 35 degrees<br>" +
+                    "<iframe width='200' height='113' src='https://www.youtube.com/embed/kR-SCpBAOmM?si=nfdaKQtbtGFnq5k5' frameborder='0' allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture' allowfullscreen></iframe>"
+                ),
+                'Marmotvalley': new mapboxgl.Popup().setHTML(
+                    "<strong>Marmot Valley</strong><br><strong>Rating:</strong> Black<br><strong>Length:</strong> 750 feet<br><strong>Average Slope:</strong> 33 degrees<br>" +
+                    "<iframe width='200' height='113' src='https://www.youtube.com/embed/ALC1TUvSRMQ' frameborder='0' allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture' allowfullscreen></iframe>"
+                ),
+                'Sweetnsour': new mapboxgl.Popup().setHTML(
+                    "<strong>Sweet N Sour</strong><br><strong>Rating:</strong> Black<br><strong>Length:</strong> 1,000 feet<br><strong>Average Slope:</strong> 30 degrees<br>" +
+                    "<iframe width='200' height='113' src='https://www.youtube.com/embed/ThOTa-JYJy8' frameborder='0' allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture' allowfullscreen></iframe>"
+                )
+            };
+
+            Object.keys(trailData).forEach(function(trail) {
+                map.on('click', `${trail}-layer`, function() {
+                    if (currentPopup) currentPopup.remove();
+                    currentPopup = trailPopups[trail].setLngLat(trailData[trail].coordinates[0]).addTo(map);
+                });
+            });
+
+            var mountainFeatureCoordinates = [
+                { coords: [-106.339999, 39.585711], videoUrl: 'https://www.youtube.com/embed/oEGp6xxbvLo' },
+                { coords: [-106.333330, 39.604559], videoUrl: 'https://www.youtube.com/embed/EFjP6GB0zdk' }
+            ];
+
+            mountainFeatureCoordinates.forEach(function(feature) {
+                var marker = new mapboxgl.Marker()
+                    .setLngLat(feature.coords)
+                    .setPopup(new mapboxgl.Popup().setHTML(
+                        "<strong>Mountain Features</strong><br>" +
+                        `<iframe width='200' height='113' src='${feature.videoUrl}' frameborder='0' allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture' allowfullscreen></iframe>`
+                    ))
+                    .addTo(map);
+                mountainMarkers.push(marker); // Add marker to array
+            });
+
+            // Adding live feed markers with link to Vail's live feed
+            var liveFeedLocations = [
+                { coords: [-106.355674, 39.604221], url: 'https://www.vail.com/the-mountain/mountain-conditions/mountain-cams.aspx' },
+                { coords: [-106.368018, 39.614264], url: 'https://www.vail.com/the-mountain/mountain-conditions/mountain-cams.aspx' },
+                { coords: [-106.301739, 39.601607], url: 'https://www.vail.com/the-mountain/mountain-conditions/mountain-cams.aspx' },
+                { coords: [-106.331016, 39.573307], url: 'https://www.vail.com/the-mountain/mountain-conditions/mountain-cams.aspx' },
+                { coords: [-106.338181, 39.602480], url: 'https://www.vail.com/the-mountain/mountain-conditions/mountain-cams.aspx' },
+                { coords: [-106.386440, 39.617826], url: 'https://www.vail.com/the-mountain/mountain-conditions/mountain-cams.aspx' }
+            ];
+
+            liveFeedLocations.forEach(function(location) {
+                var liveFeedMarker = new mapboxgl.Marker({ color: 'red' }) // Red icon for live feed
+                    .setLngLat(location.coords)
+                    .setPopup(new mapboxgl.Popup().setHTML(
+                        `<strong>Live Cam</strong><br><a href='${location.url}' target='_blank'>View Mountain Cams - Official Vail Site</a>`
+                    ))
+                    .addTo(map);
+                liveFeedMarkers.push(liveFeedMarker); // Add marker to array
+            });
+
+            Object.keys(liftData).forEach(function(lift) {
+                map.addSource(lift, {
+                    type: 'geojson',
+                    data: { type: 'Feature', geometry: { type: 'LineString', coordinates: liftData[lift].coordinates } }
+                });
+                map.addLayer({
+                    id: `${lift}-layer`,
+                    type: 'line',
+                    source: lift,
+                    paint: {
+                        'line-color': liftData[lift].color,
+                        'line-width': 4,
+                        'line-dasharray': [4, 4] // Adds the dashed line effect
+                    },
+                    layout: { 'visibility': 'visible' } // Ensure initial visibility is set to 'visible'
+                });
+
+                map.on('click', `${lift}-layer`, function() {
+                    if (currentPopup) currentPopup.remove();
+                    currentPopup = new mapboxgl.Popup().setLngLat(liftData[lift].coordinates[0]).setHTML(liftData[lift].popupContent).addTo(map);
+                });
+            });
+        });
+
+        function toggleTrails() {
+            trailsVisible = !trailsVisible;
+            Object.keys(trailData).forEach(function(trail) {
+                map.setLayoutProperty(`${trail}-layer`, 'visibility', trailsVisible ? 'visible' : 'none');
+            });
+        }
+
+        function toggleMountainFeatures() {
+            mountainFeaturesVisible = !mountainFeaturesVisible;
+            mountainMarkers.forEach(function(marker) {
+                marker.getElement().style.display = mountainFeaturesVisible ? 'block' : 'none';
+            });
+        }
+
+        function toggleLifts() {
+            liftsVisible = !liftsVisible;
+            Object.keys(liftData).forEach(function(lift) {
+                map.setLayoutProperty(`${lift}-layer`, 'visibility', liftsVisible ? 'visible' : 'none');
+            });
+        }
+
+        function toggleMountainCams() {
+            mountainCamsVisible = !mountainCamsVisible;
+            liveFeedMarkers.forEach(function(marker) {
+                marker.getElement().style.display = mountainCamsVisible ? 'block' : 'none';
+            });
+        }
+    </script>
+</body>
+</html>

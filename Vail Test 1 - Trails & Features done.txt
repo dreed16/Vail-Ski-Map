@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.css' rel='stylesheet' />
+    <style>
+        #map {
+            width: 100%;
+            height: 100vh;
+        }
+
+        .mapboxgl-ctrl {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+        }
+
+        .toggle-button {
+            background-color: #fff;
+            border: 2px solid #007aff;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="mapboxgl-ctrl">
+        <button class="toggle-button" onclick="toggleTrails()">Toggle Trails</button>
+        <button class="toggle-button" onclick="toggleMountainFeatures()">Toggle Mountain Features</button>
+    </div>
+
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1IjoiZHJlZWR2YWlsIiwiYSI6ImNtMzU2a3hlZzA3cHYyanE0bzNkYWxvam0ifQ.MxjGhWW6PF__DF9ujyxXiA';
+
+        var map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/satellite-streets-v11',
+            center: [-106.356017, 39.604750],
+            zoom: 12
+        });
+
+        var trailsVisible = true;
+        var mountainFeaturesVisible = true;
+        var currentPopup = null;
+
+        var mountainMarkers = []; // Array to hold mountain feature markers
+
+        var trailData = {
+            'zoot-chute': { coordinates: [[-106.335186, 39.602402], [-106.331768, 39.597342]], color: '#ff0000' },
+            'georges-thumb': { coordinates: [[-106.106.338687, 39.595144], [-106.340971, 39.591168]], color: '#0000ff' },
+            'Whales_Tail': { coordinates: [[-106.337700, 39.595197], [-106.334206, 39.593493]], color: '#00ff00' }
+        };
+
+        map.on('load', function() {
+            map.addSource('dem', {
+                type: 'raster-dem',
+                url: 'mapbox://mapbox.terrain-rgb',
+                tileSize: 512,
+                maxzoom: 14
+            });
+            map.setTerrain({ source: 'dem', exaggeration: 1.5 });
+
+            Object.keys(trailData).forEach(function(trail) {
+                map.addSource(trail, {
+                    type: 'geojson',
+                    data: { type: 'Feature', geometry: { type: 'LineString', coordinates: trailData[trail].coordinates } }
+                });
+                map.addLayer({
+                    id: `${trail}-layer`,
+                    type: 'line',
+                    source: trail,
+                    paint: { 'line-color': trailData[trail].color, 'line-width': 4 },
+                    layout: { 'visibility': 'visible' } // Ensure the initial visibility is set to 'visible'
+                });
+            });
+
+            var trailPopups = {
+                'zoot-chute': new mapboxgl.Popup().setHTML(
+                    "<strong>Zoot Chute</strong><br><strong>Rating:</strong> EX<br><strong>Length:</strong> 250 feet<br><strong>Average Slope:</strong> 35 degrees<br>" +
+                    "<iframe width='200' height='113' src='https://www.youtube.com/embed/Z9rOqHa8BTw' frameborder='0' allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture' allowfullscreen></iframe>"
+                ),
+                'georges-thumb': new mapboxgl.Popup().setHTML(
+                    "<strong>George's Thumb</strong><br><strong>Rating:</strong> Double Black<br><strong>Length:</strong> 750 feet<br><strong>Average Slope:</strong> 33 degrees<br>" +
+                    "<iframe width='200' height='113' src='https://www.youtube.com/embed/ALC1TUvSRMQ' frameborder='0' allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture' allowfullscreen></iframe>"
+                ),
+                'Whales_Tail': new mapboxgl.Popup().setHTML(
+                    "<strong>Whale's Tail</strong><br><strong>Rating:</strong> Double Black<br><strong>Length:</strong> 1,000 feet<br><strong>Average Slope:</strong> 30 degrees<br>" +
+                    "<iframe width='200' height='113' src='https://www.youtube.com/embed/ThOTa-JYJy8' frameborder='0' allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture' allowfullscreen></iframe>"
+                )
+            };
+
+            Object.keys(trailData).forEach(function(trail) {
+                map.on('click', `${trail}-layer`, function() {
+                    if (currentPopup) currentPopup.remove();
+                    currentPopup = trailPopups[trail].setLngLat(trailData[trail].coordinates[0]).addTo(map);
+                });
+            });
+
+            var mountainFeatureCoordinates = [
+                { coords: [-106.339999, 39.585711], videoUrl: 'https://www.youtube.com/embed/oEGp6xxbvLo' },
+                { coords: [-106.333330, 39.604559], videoUrl: 'https://www.youtube.com/embed/EFjP6GB0zdk' } // Updated to new video URL
+            ];
+
+            mountainFeatureCoordinates.forEach(function(feature) {
+                var marker = new mapboxgl.Marker()
+                    .setLngLat(feature.coords)
+                    .setPopup(new mapboxgl.Popup().setHTML(
+                        "<strong>Mountain Features</strong><br>" +
+                        `<iframe width='200' height='113' src='${feature.videoUrl}' frameborder='0' allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture' allowfullscreen></iframe>`
+                    ))
+                    .addTo(map);
+                mountainMarkers.push(marker); // Add marker to array
+            });
+        });
+
+        function toggleTrails() {
+            trailsVisible = !trailsVisible;
+            Object.keys(trailData).forEach(function(trail) {
+                var layerId = `${trail}-layer`;
+                if (map.getLayer(layerId)) { // Ensure the layer exists before toggling
+                    var visibility = trailsVisible ? 'visible' : 'none';
+                    map.setLayoutProperty(layerId, 'visibility', visibility);
+                    console.log(`Setting ${layerId} to ${visibility}`); // Confirm visibility change in console
+                } else {
+                    console.warn(`Layer ${layerId} not found`); // Warning if layer is missing
+                }
+            });
+        }
+
+        function toggleMountainFeatures() {
+            mountainFeaturesVisible = !mountainFeaturesVisible;
+            mountainMarkers.forEach(function(marker) {
+                if (mountainFeaturesVisible) {
+                    marker.addTo(map);
+                } else {
+                    marker.remove();
+                }
+            });
+        }
+    </script>
+</body>
+</html>
